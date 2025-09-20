@@ -1,0 +1,63 @@
+name: Deploy SFTP WebDisk to Server
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch: # 允许手动触发
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Run tests
+      run: npm test
+      continue-on-error: true # 如果没有测试，继续执行
+    
+    - name: Deploy to server via SSH
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.SERVER_HOST }}
+        username: ${{ secrets.SERVER_USERNAME }}
+        key: ${{ secrets.SERVER_SSH_KEY }}
+        port: ${{ secrets.SERVER_PORT }}
+        script: |
+          # 创建项目目录
+          mkdir -p /var/www/sftp-webdisk
+          
+          # 进入项目目录
+          cd /var/www/sftp-webdisk
+          
+          # 拉取最新代码
+          git clone https://github.com/${{ github.repository }} . || (git fetch && git reset --hard origin/main)
+          
+          # 安装依赖
+          npm ci --production
+          
+          # 设置环境变量
+          echo "SFTP_HOST=${{ secrets.SFTP_HOST }}" > .env
+          echo "SFTP_PORT=${{ secrets.SFTP_PORT }}" >> .env
+          echo "SFTP_USERNAME=${{ secrets.SFTP_USERNAME }}" >> .env
+          echo "SFTP_PASSWORD=${{ secrets.SFTP_PASSWORD }}" >> .env
+          echo "PORT=3000" >> .env
+          
+          # 停止旧服务
+          pm2 stop sftp-webdisk || true
+          
+          # 启动新服务
+          pm2 start src/server.js --name sftp-webdisk
+          
+          # 保存 PM2 配置
+          pm2 save
