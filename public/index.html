@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SFTP 网盘</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-top">
+                <h1><i class="fas fa-cloud"></i> SFTP 网盘</h1>
+                <div class="search-box">
+                    <input type="text" id="searchInput" placeholder="搜索文件...">
+                    <button onclick="searchFiles()"><i class="fas fa-search"></i></button>
+                </div>
+            </div>
+            
+            <div class="breadcrumb" id="breadcrumb">
+                <!-- 面包屑导航将在这里显示 -->
+            </div>
+            
+            <div class="path-nav">
+                <input type="text" id="currentPath" value="/" readonly>
+                <button onclick="goToPath()"><i class="fas fa-arrow-right"></i> 前往</button>
+            </div>
+        </header>
+
+        <div class="toolbar">
+            <button onclick="showUploadModal()"><i class="fas fa-upload"></i> 上传文件</button>
+            <button onclick="showCreateDirModal()"><i class="fas fa-folder-plus"></i> 新建文件夹</button>
+            <button onclick="refreshFiles()"><i class="fas fa-sync-alt"></i> 刷新</button>
+            <button onclick="showInfoModal()"><i class="fas fa-info-circle"></i> 系统信息</button>
+            <button onclick="pasteFile()" id="pasteButton" style="display: none;"><i class="fas fa-paste"></i> 粘贴</button>
+            <button onclick="toggleSelectMode()" id="selectModeButton"><i class="fas fa-check-square"></i> 多选</button>
+        </div>
+        
+        <div class="batch-toolbar" id="batchToolbar" style="display: none;">
+            <button onclick="downloadSelected()"><i class="fas fa-download"></i> 批量下载</button>
+            <button onclick="deleteSelected()"><i class="fas fa-trash"></i> 批量删除</button>
+            <button onclick="compressSelected()"><i class="fas fa-compress"></i> 批量压缩</button>
+            <button onclick="cancelSelectMode()"><i class="fas fa-times"></i> 取消</button>
+        </div>
+
+        <div class="file-list" id="fileList">
+            <!-- 文件列表将在这里显示 -->
+        </div>
+
+        <!-- 上传文件模态框 -->
+        <div id="uploadModal" class="modal">
+            <div class="modal-content">
+                <span class="close" onclick="closeModal('uploadModal')">&times;</span>
+                <h2><i class="fas fa-upload"></i> 上传文件</h2>
+                <form id="uploadForm">
+                    <div class="form-group">
+                        <label for="fileInput">选择文件:</label>
+                        <input type="file" id="fileInput" multiple required>
+                    </div>
+                    <div class="form-group">
+                        <label for="uploadPath">上传路径:</label>
+                        <input type="text" id="uploadPath" readonly>
+                    </div>
+                    <button type="submit"><i class="fas fa-upload"></i> 上传</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- 创建目录模态框 -->
+        <div id="createDirModal" class="modal">
+            <div class="modal-content">
+                <span class="close" onclick="closeModal('createDirModal')">&times;</span>
+                <h2><i class="fas fa-folder-plus"></i> 新建文件夹</h2>
+                <form id="createDirForm">
+                    <div class="form-group">
+                        <label for="dirName">文件夹名称:</label>
+                        <input type="text" id="dirName" placeholder="请输入文件夹名称" required>
+                    </div>
+                    <button type="submit"><i class="fas fa-plus"></i> 创建</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- 文件信息模态框 -->
+        <div id="infoModal" class="modal">
+            <div class="modal-content">
+                <span class="close" onclick="closeModal('infoModal')">&times;</span>
+                <h2><i class="fas fa-info-circle"></i> 系统信息</h2>
+                <div id="systemInfo">
+                    <!-- 系统信息将在这里显示 -->
+                </div>
+            </div>
+        </div>
+
+        <!-- 文件详情模态框 -->
+        <div id="detailModal" class="modal">
+            <div class="modal-content">
+                <span class="close" onclick="closeModal('detailModal')">&times;</span>
+                <h2><i class="fas fa-file-alt"></i> 文件详情</h2>
+                <div id="fileDetail">
+                    <!-- 文件详情将在这里显示 -->
+                </div>
+            </div>
+        </div>
+
+        <!-- 预览模态框 -->
+        <div id="previewModal" class="modal">
+            <div class="modal-content preview-content">
+                <span class="close" onclick="closeModal('previewModal')">&times;</span>
+                <h2 id="previewTitle"></h2>
+                <div id="previewContent">
+                    <!-- 预览内容将在这里显示 -->
+                </div>
+            </div>
+        </div>
+
+        <!-- 压缩文件模态框 -->
+        <div id="compressModal" class="modal">
+            <div class="modal-content">
+                <span class="close" onclick="closeModal('compressModal')">&times;</span>
+                <h2><i class="fas fa-file-archive"></i> 压缩文件</h2>
+                <form id="compressForm">
+                    <div class="form-group">
+                        <label for="compressName">压缩文件名:</label>
+                        <input type="text" id="compressName" placeholder="请输入压缩文件名" required>
+                    </div>
+                    <input type="hidden" id="compressSource">
+                    <button type="submit"><i class="fas fa-compress"></i> 压缩</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- 批量压缩模态框 -->
+        <div id="batchCompressModal" class="modal">
+            <div class="modal-content">
+                <span class="close" onclick="closeModal('batchCompressModal')">&times;</span>
+                <h2><i class="fas fa-file-archive"></i> 批量压缩</h2>
+                <form id="batchCompressForm">
+                    <div class="form-group">
+                        <label for="batchCompressName">压缩文件名:</label>
+                        <input type="text" id="batchCompressName" placeholder="请输入压缩文件名" required>
+                    </div>
+                    <button type="submit"><i class="fas fa-compress"></i> 压缩</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- 加载指示器 -->
+        <div id="loadingIndicator" class="loading-indicator">
+            <div class="spinner"></div>
+            <p>正在处理...</p>
+        </div>
+
+        <!-- 左下角上传进度条 -->
+        <div id="uploadProgress" class="upload-progress">
+            <div class="upload-progress-header">
+                <div class="upload-progress-title">文件上传中...</div>
+                <button class="upload-progress-close" onclick="hideUploadProgress()">&times;</button>
+            </div>
+            <div class="upload-progress-bar">
+                <div class="upload-progress-fill" id="uploadProgressFill"></div>
+            </div>
+            <div class="upload-progress-text" id="uploadProgressText">0%</div>
+        </div>
+
+        <!-- 自定义确认弹窗 -->
+        <div id="confirmModal" class="modal">
+            <div class="modal-content confirm-modal">
+                <h2><i class="fas fa-question-circle"></i> 确认操作</h2>
+                <p id="confirmMessage"></p>
+                <div class="modal-actions">
+                    <button id="confirmCancel" class="btn-secondary"><i class="fas fa-times"></i> 取消</button>
+                    <button id="confirmOK" class="btn-primary"><i class="fas fa-check"></i> 确定</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 自定义输入弹窗 -->
+        <div id="promptModal" class="modal">
+            <div class="modal-content prompt-modal">
+                <h2><i class="fas fa-edit"></i> <span id="promptTitle">请输入</span></h2>
+                <div class="form-group">
+                    <label for="promptInput" id="promptLabel">输入内容:</label>
+                    <input type="text" id="promptInput" placeholder="">
+                </div>
+                <div class="modal-actions">
+                    <button id="promptCancel" class="btn-secondary"><i class="fas fa-times"></i> 取消</button>
+                    <button id="promptOK" class="btn-primary"><i class="fas fa-check"></i> 确定</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
